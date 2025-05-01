@@ -88,8 +88,7 @@ const parameterData = {
             { type: 'min', value: 18, hard: true, code: 'CMTL-03a', message: "Must not be lower than 18 epochs (approx 3 months)." },
             { type: 'max', value: 293, hard: true, code: 'CMTL-04a', message: "Must not exceed 293 epochs (approx 4 years)." },
             { type: 'condition', hard: false, code: 'CMTL-05a', message: "Should not exceed 220 epochs (approx 3 years)." },
-            { type: 'condition', hard: true, code: 'CMTL-01a', message: "Must not be zero." }, // Covered by min
-            { type: 'condition', hard: true, code: 'CMTL-02a', message: "Must not be negative." } // Covered by min
+            // CMTL-01a (not zero) and CMTL-02a (not negative) are covered by the 'min' rule check
         ]
     },
     // --- Economic Parameters ---
@@ -116,8 +115,9 @@ const parameterData = {
         rules: [
             { type: 'min', value: 250, hard: true, code: 'SPTN-01', message: "Must not be lower than 250." },
             { type: 'max', value: 2000, hard: true, code: 'SPTN-02', message: "Must not exceed 2,000." },
-            { type: 'condition', hard: true, code: 'SPTN-04', message: "Must not be zero." }, // Covered by min
-            { type: 'min', value: 0, hard: true, code: 'SPTN-03', message: "Must not be negative." } // Covered by min
+            // --- CHANGE HERE: Use specific 'notEqual' type for SPTN-04 ---
+            { type: 'notEqual', value: 0, hard: true, code: 'SPTN-04', message: "Must not be zero." },
+            { type: 'min', value: 0, hard: true, code: 'SPTN-03', message: "Must not be negative." } // Covered by min and notEqual check
         ]
     },
     'poolPledgeInfluence': {
@@ -179,19 +179,33 @@ function findGuardrailText(guardrailCode) {
 
     // Create a regex to find the line starting with the Guardrail code
     // Handles potential leading spaces and the (y)/(x)/(~) marker
-    const regex = new RegExp(`^\\s*${guardrailCode}\\s*\\([yx~].*?\\)\\s*(.*)$`, 'im'); // i=insensitive, m=multiline
+    // Escape the code in case it contains regex special chars (like '-')
+    const escapedCode = guardrailCode.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`^\\s*${escapedCode}\\s*\\([yx~].*?\\)\\s*(.*)$`, 'im'); // i=insensitive, m=multiline
     const match = constitutionText.match(regex);
 
     if (match && match[1]) {
         // Return the code, marker, and the captured text
-        return `${guardrailCode}${match[0].substring(guardrailCode.length, match[0].indexOf(')') + 1)} ${match[1].trim()}`;
+        // Need to reconstruct the matched line carefully
+        const fullLineMatch = constitutionText.match(new RegExp(`^\\s*${escapedCode}\\s*\\([yx~].*?\\).*$`, 'im'));
+        return fullLineMatch ? fullLineMatch[0].trim() : `Text for ${guardrailCode} not found precisely.`; // Return full matched line
     } else {
         // Fallback: Simpler search if the above fails (might grab too much/little)
-        const simpleRegex = new RegExp(`^.*${guardrailCode}.*$`, 'im');
+        const simpleRegex = new RegExp(`^.*${escapedCode}.*$`, 'im');
         const simpleMatch = constitutionText.match(simpleRegex);
-        return simpleMatch ? simpleMatch[0].trim() : `Text for ${guardrailCode} not found precisely.`;
+        // Try to refine fallback by looking for the code specifically
+        if (simpleMatch) {
+             const line = simpleMatch[0].trim();
+             // Check if the code is reasonably at the start of the line
+             if (line.toLowerCase().indexOf(guardrailCode.toLowerCase()) < 10) {
+                 return line;
+             }
+        }
+        console.warn(`Could not precisely find text for Guardrail: ${guardrailCode}`);
+        return `Text for ${guardrailCode} could not be found precisely. Please check Appendix I manually.`;
     }
 }
+
 
 /**
  * Checks the input value against the defined rules for the selected parameter.
@@ -205,8 +219,13 @@ function checkValueAgainstRules(paramKey, inputValueStr) {
         return '<p class="no-check">No value entered or no specific rules defined for automated checking.</p>';
     }
 
-    const value = parseFloat(inputValueStr);
+    // Use Number() for potentially more flexible parsing than parseFloat()
+    const value = Number(inputValueStr);
     if (isNaN(value)) {
+        // Check if it's a special case like executionUnitPrices which might not be a single number
+        if (paramKey === 'executionUnitPrices') {
+             return '<p class="no-check">Automated check not implemented for executionUnitPrices (requires fraction input).</p>';
+        }
         return '<p class="warning">Invalid input: Please enter a numeric value.</p>';
     }
 
@@ -217,7 +236,8 @@ function checkValueAgainstRules(paramKey, inputValueStr) {
     paramInfo.rules.forEach(rule => {
         let violated = false;
         let warning = false;
-        let message = rule.message || `Rule ${rule.code}`; // Default message
+        // Use rule.message if available, otherwise construct a default
+        let message = rule.message || `Rule condition for ${rule.code}`;
 
         switch (rule.type) {
             case 'min':
@@ -226,35 +246,45 @@ function checkValueAgainstRules(paramKey, inputValueStr) {
             case 'max':
                 if (value > rule.value) violated = true;
                 break;
-            case 'condition':
-                // These are harder to check automatically, often just display the message
-                // If it's a hard rule, treat it as a violation reminder, otherwise a warning reminder
-                 if (rule.hard) {
-                     violated = true; // Treat as violation reminder
-                     message = `Violation Reminder (${rule.code}): ${message}`;
-                 } else {
-                     warning = true; // Treat as warning reminder
-                     message = `Warning Reminder (${rule.code}): ${message}`;
-                 }
+            // --- CHANGE HERE: Add case for 'notEqual' ---
+            case 'notEqual':
+                // Use == for comparison to handle potential type differences (e.g., 0 vs "0")
+                // eslint-disable-next-line eqeqeq
+                if (value == rule.value) violated = true;
                 break;
+            case 'condition':
+                // These are conditions that *cannot* be easily checked automatically here
+                // Display them as reminders
+                 if (rule.hard) {
+                     // Don't mark as violated, just display as info/reminder
+                     analysisHtml += `<p class="info">Reminder (${rule.code}): ${message}</p>`;
+                 } else {
+                     // Treat non-hard conditions as general info/warnings
+                     analysisHtml += `<p class="warning">Note (${rule.code}): ${message}</p>`;
+                 }
+                 // Skip adding to violation/warning counts for these reminders
+                 continue; // Go to the next rule
             // Add more rule types if needed (e.g., 'enum', 'pattern')
         }
 
+        // Determine if the violation/warning applies based on rule hardness
         if (violated && rule.hard) {
             analysisHtml += `<p class="violation">Violation (${rule.code}): ${message}</p>`;
             violations++;
         } else if (violated && !rule.hard) {
+            // If a 'soft' rule (should not) is violated
             analysisHtml += `<p class="warning">Warning (${rule.code}): ${message}</p>`;
             warnings++;
-        } else if (warning) { // For condition rules marked as warnings
-             analysisHtml += `<p class="warning">${message}</p>`;
-             warnings++;
         }
+        // Note: 'warning' flag isn't used directly anymore for value checks,
+        // only for non-checkable 'condition' rules above.
     });
 
-    if (violations === 0 && warnings === 0) {
+    // Add summary message if no issues found
+    if (violations === 0 && warnings === 0 && analysisHtml.indexOf('<p') === -1) { // Check if any messages were added
         analysisHtml += '<p class="info">Input value appears consistent with defined numeric Guardrail limits.</p>';
     }
+     // Update the heading with counts if there were issues
      if (violations > 0) {
          analysisHtml = `<h3>Value Analysis: <span style="color: #dc3545;">(${violations} Violation${violations > 1 ? 's' : ''})</span></h3>` + analysisHtml.substring(analysisHtml.indexOf(':</h3>')+6);
      } else if (warnings > 0) {
@@ -292,12 +322,13 @@ function performCheck() {
         paramInfo.guardrails.forEach(code => {
             const fullText = findGuardrailText(code);
             let itemClass = 'guardrail-item';
+            // Check if the found text contains 'must' or 'should' for styling
             if (fullText && fullText.toLowerCase().includes('must')) {
                 itemClass += ' requirement';
             } else if (fullText && fullText.toLowerCase().includes('should')) {
                  itemClass += ' recommendation';
             }
-            // Use the code itself as a fallback if full text isn't found
+            // Display the full text found, or a fallback message
             resultsHtml += `<div class="${itemClass}"><strong>${code}</strong> ${fullText ? fullText.substring(fullText.indexOf(')') + 1).trim() : 'Full text not found.'}</div>`;
         });
     } else {
