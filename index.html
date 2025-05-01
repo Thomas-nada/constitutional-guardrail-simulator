@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cardano Guardrail Impact Simulator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Cardano Guardrail Impact Simulator</h1>
+        <p>Select a protocol parameter and enter a proposed value to see relevant Guardrails and potential violations.</p>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="parameterSelect">Select Parameter:</label>
+                <select id="parameterSelect">
+                    <option value="">-- Select a Parameter --</option>
+                    </select>
+            </div>
+
+            <div class="control-group">
+                <label for="parameterValue">Proposed Value:</label>
+                <input type="text" id="parameterValue" placeholder="Enter value (e.g., 100000)">
+                <span id="parameterUnit"></span> </div>
+
+            <button id="checkButton">Check Guardrails</button>
+        </div>
+
+        <h2>Relevant Guardrails & Analysis:</h2>
+        <div id="results">
+            <p>Select a parameter and enter a value to see the analysis.</p>
+            </div>
+    </div>
+
+    <script src="constitution.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

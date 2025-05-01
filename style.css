@@ -1,0 +1,192 @@
+/* style.css */
+
+/* Basic body styling */
+body {
+    font-family: sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+/* Main container styling */
+.container {
+    max-width: 900px; /* Slightly wider for more content */
+    margin: 20px auto;
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Headings */
+h1, h2 {
+    color: #003366; /* Cardano blue-ish */
+    margin-bottom: 0.8em;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.3em;
+}
+h1 {
+    margin-bottom: 0.5em;
+}
+
+p {
+    margin-bottom: 1.2em;
+}
+
+/* Controls area styling */
+.controls {
+    background-color: #eef; /* Light blue background for controls */
+    padding: 20px;
+    border-radius: 6px;
+    margin-bottom: 30px;
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    gap: 20px; /* Spacing between control groups */
+    /* --- CHANGE HERE: Align items to the start (top) instead of end (bottom) --- */
+    align-items: flex-start;
+}
+
+.control-group {
+    flex: 1; /* Allow groups to grow */
+    min-width: 200px; /* Minimum width before wrapping */
+}
+
+/* Label styling */
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #333;
+}
+
+/* Select dropdown styling */
+select, input[type="text"] {
+    width: 100%; /* Full width within its group */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+    box-sizing: border-box; /* Include padding and border in width */
+    height: 40px; /* Give select and input a consistent height */
+}
+
+/* Adjust input width slightly less than 100% if unit is displayed */
+/* We might need a more robust solution if units vary a lot */
+input[type="text"] {
+    display: inline-block; /* To allow unit span next to it */
+    width: calc(100% - 55px); /* Adjust width to leave space for unit, ensure consistent height */
+    margin-right: 5px;
+    vertical-align: top; /* Align input with the top of the line */
+}
+
+#parameterUnit {
+    font-size: 0.9em;
+    color: #555;
+    display: inline-block;
+    min-width: 45px; /* Ensure some space for the unit */
+    line-height: 40px; /* Vertically center unit text with input box */
+    vertical-align: top; /* Align span with the top of the line */
+    padding-left: 5px; /* Add a little space before the unit */
+}
+
+
+/* Button styling */
+button {
+    background-color: #0056b3;
+    color: white;
+    padding: 10px 20px; /* Padding */
+    border: none;
+    border-radius: 4px;
+    font-size: 1em; /* Match input font size */
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    height: 40px; /* Match input height */
+    /* Removed align-self as parent align-items handles vertical position */
+}
+
+button:hover {
+    background-color: #003366;
+}
+
+/* Results area styling */
+#results {
+    margin-top: 20px;
+}
+
+.guardrail-item {
+    margin-bottom: 15px;
+    padding: 12px;
+    background-color: #f9f9f9;
+    border: 1px solid #eee;
+    border-left: 4px solid #ccc; /* Default grey border */
+    border-radius: 4px;
+    font-size: 0.95em;
+    white-space: pre-wrap; /* Preserve formatting */
+}
+
+.guardrail-item.recommendation {
+    border-left-color: #ffc107; /* Yellow for recommendations ('should') */
+}
+
+.guardrail-item.requirement {
+    border-left-color: #17a2b8; /* Blue for requirements ('must') */
+}
+
+.guardrail-item strong { /* Highlight the Guardrail code */
+    font-family: monospace;
+    background-color: #eee;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    margin-right: 5px;
+}
+
+.analysis-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px dashed #ccc;
+}
+
+.analysis-section h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #003366;
+}
+
+.violation {
+    color: #dc3545; /* Red for violations */
+    font-weight: bold;
+    border: 1px solid #dc3545;
+    background-color: #f8d7da;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.warning {
+    color: #856404; /* Orange/brown for warnings */
+    font-weight: bold;
+    border: 1px solid #ffc107;
+    background-color: #fff3cd;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.info {
+    color: #0c5460; /* Dark cyan for info */
+    font-weight: normal;
+    border: 1px solid #17a2b8;
+    background-color: #d1ecf1;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.no-check {
+     font-style: italic;
+     color: #666;
+}
