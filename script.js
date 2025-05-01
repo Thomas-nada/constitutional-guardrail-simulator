@@ -115,7 +115,6 @@ const parameterData = {
         rules: [
             { type: 'min', value: 250, hard: true, code: 'SPTN-01', message: "Must not be lower than 250." },
             { type: 'max', value: 2000, hard: true, code: 'SPTN-02', message: "Must not exceed 2,000." },
-            // --- CHANGE HERE: Use specific 'notEqual' type for SPTN-04 ---
             { type: 'notEqual', value: 0, hard: true, code: 'SPTN-04', message: "Must not be zero." },
             { type: 'min', value: 0, hard: true, code: 'SPTN-03', message: "Must not be negative." } // Covered by min and notEqual check
         ]
@@ -146,6 +145,8 @@ const parameterData = {
     // Add more parameters here...
 };
 
+console.log("Script loaded."); // DEBUG
+
 // --- Get HTML Elements ---
 const parameterSelect = document.getElementById('parameterSelect');
 const parameterValueInput = document.getElementById('parameterValue');
@@ -153,20 +154,46 @@ const parameterUnitSpan = document.getElementById('parameterUnit');
 const checkButton = document.getElementById('checkButton');
 const resultsDiv = document.getElementById('results');
 
+// DEBUG: Check if elements are found
+console.log("parameterSelect element:", parameterSelect);
+console.log("checkButton element:", checkButton);
+console.log("resultsDiv element:", resultsDiv);
+
 // --- Functions ---
 
 /**
  * Populates the dropdown menu with parameter names.
  */
 function populateParameterDropdown() {
+    console.log("Running populateParameterDropdown..."); // DEBUG
+    // DEBUG: Check parameterData object
+    if (!parameterData || Object.keys(parameterData).length === 0) {
+        console.error("parameterData is empty or undefined!");
+        return;
+    }
+     // DEBUG: Check if parameterSelect element exists before proceeding
+     if (!parameterSelect) {
+         console.error("parameterSelect element not found in populateParameterDropdown!");
+         return;
+     }
+
     const parameters = Object.keys(parameterData).sort(); // Get sorted parameter names
-    parameters.forEach(paramKey => {
-        const option = document.createElement('option');
-        option.value = paramKey;
-        // Use the description for display, fallback to the key
-        option.textContent = parameterData[paramKey].description || paramKey;
-        parameterSelect.appendChild(option);
+    console.log("Parameters found:", parameters); // DEBUG
+
+    parameters.forEach((paramKey, index) => {
+        // DEBUG: Log each parameter being added
+        console.log(`Adding option ${index + 1}: ${paramKey}`);
+        try {
+            const option = document.createElement('option');
+            option.value = paramKey;
+            // Use the description for display, fallback to the key
+            option.textContent = parameterData[paramKey]?.description || paramKey; // Use optional chaining
+            parameterSelect.appendChild(option);
+        } catch (error) {
+            console.error(`Error adding option for ${paramKey}:`, error); // DEBUG error in loop
+        }
     });
+    console.log("Finished populateParameterDropdown."); // DEBUG
 }
 
 /**
@@ -175,34 +202,40 @@ function populateParameterDropdown() {
  * @returns {string|null} - The full line containing the Guardrail text, or null if not found.
  */
 function findGuardrailText(guardrailCode) {
-    if (!constitutionText || !guardrailCode) return null;
+    // Check if constitution text is available
+    if (typeof constitutionText === 'undefined' || !constitutionText || !guardrailCode) {
+        console.error("constitutionText is not available in findGuardrailText");
+        return `Error: Constitution text not loaded.`;
+    }
 
-    // Create a regex to find the line starting with the Guardrail code
-    // Handles potential leading spaces and the (y)/(x)/(~) marker
+
     // Escape the code in case it contains regex special chars (like '-')
     const escapedCode = guardrailCode.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`^\\s*${escapedCode}\\s*\\([yx~].*?\\)\\s*(.*)$`, 'im'); // i=insensitive, m=multiline
+    // Regex to find the line starting with the Guardrail code, including the marker (y/x/~)
+    const regex = new RegExp(`^\\s*${escapedCode}\\s*\\([yx~][^)]*\\)\\s*(.*)$`, 'im'); // i=insensitive, m=multiline
     const match = constitutionText.match(regex);
 
-    if (match && match[1]) {
-        // Return the code, marker, and the captured text
-        // Need to reconstruct the matched line carefully
-        const fullLineMatch = constitutionText.match(new RegExp(`^\\s*${escapedCode}\\s*\\([yx~].*?\\).*$`, 'im'));
-        return fullLineMatch ? fullLineMatch[0].trim() : `Text for ${guardrailCode} not found precisely.`; // Return full matched line
+    if (match) {
+        // Attempt to return the full matched line for context
+        const fullLineMatch = constitutionText.match(new RegExp(`^.*${escapedCode}.*$`, 'im'));
+        return fullLineMatch ? fullLineMatch[0].trim() : `Text for ${guardrailCode} found but couldn't extract full line.`;
     } else {
-        // Fallback: Simpler search if the above fails (might grab too much/little)
+        // Fallback: Simpler search if the specific format fails
+        console.warn(`Could not precisely find text for Guardrail using specific format: ${guardrailCode}. Trying broader search.`);
         const simpleRegex = new RegExp(`^.*${escapedCode}.*$`, 'im');
         const simpleMatch = constitutionText.match(simpleRegex);
-        // Try to refine fallback by looking for the code specifically
         if (simpleMatch) {
              const line = simpleMatch[0].trim();
-             // Check if the code is reasonably at the start of the line
-             if (line.toLowerCase().indexOf(guardrailCode.toLowerCase()) < 10) {
+             // Basic check if the code appears near the start
+             if (line.toLowerCase().indexOf(guardrailCode.toLowerCase()) < 20) { // Allow slightly more offset
                  return line;
+             } else {
+                 console.warn(`Found line for ${guardrailCode}, but code not near start: "${line}"`);
+                 return `Text for ${guardrailCode} found, but context might be inaccurate. Please check Appendix I.`;
              }
         }
-        console.warn(`Could not precisely find text for Guardrail: ${guardrailCode}`);
-        return `Text for ${guardrailCode} could not be found precisely. Please check Appendix I manually.`;
+        console.error(`Could not find any line containing Guardrail: ${guardrailCode}`);
+        return `Text for ${guardrailCode} could not be found. Please check Appendix I manually.`;
     }
 }
 
@@ -215,17 +248,17 @@ function findGuardrailText(guardrailCode) {
  */
 function checkValueAgainstRules(paramKey, inputValueStr) {
     const paramInfo = parameterData[paramKey];
-    if (!paramInfo.rules || inputValueStr.trim() === '') {
+    // Check if rules exist for this parameter
+    if (!paramInfo || !paramInfo.rules || inputValueStr.trim() === '') {
         return '<p class="no-check">No value entered or no specific rules defined for automated checking.</p>';
     }
 
-    // Use Number() for potentially more flexible parsing than parseFloat()
+    // Convert input to a number
     const value = Number(inputValueStr);
+    // Check if conversion failed (input was not a valid number)
     if (isNaN(value)) {
-        // Check if it's a special case like executionUnitPrices which might not be a single number
-        if (paramKey === 'executionUnitPrices') {
-             return '<p class="no-check">Automated check not implemented for executionUnitPrices (requires fraction input).</p>';
-        }
+        // Allow specific non-numeric parameters if needed in the future
+        // if (paramKey === 'someNonNumericParam') { ... }
         return '<p class="warning">Invalid input: Please enter a numeric value.</p>';
     }
 
@@ -233,12 +266,13 @@ function checkValueAgainstRules(paramKey, inputValueStr) {
     let violations = 0;
     let warnings = 0;
 
+    // Iterate through each rule defined for this parameter
     paramInfo.rules.forEach(rule => {
         let violated = false;
-        let warning = false;
-        // Use rule.message if available, otherwise construct a default
+        // Use the specific message from the rule, or create a default
         let message = rule.message || `Rule condition for ${rule.code}`;
 
+        // Evaluate based on the rule type
         switch (rule.type) {
             case 'min':
                 if (value < rule.value) violated = true;
@@ -246,42 +280,39 @@ function checkValueAgainstRules(paramKey, inputValueStr) {
             case 'max':
                 if (value > rule.value) violated = true;
                 break;
-            // --- CHANGE HERE: Add case for 'notEqual' ---
             case 'notEqual':
                 // Use == for comparison to handle potential type differences (e.g., 0 vs "0")
                 // eslint-disable-next-line eqeqeq
                 if (value == rule.value) violated = true;
                 break;
             case 'condition':
-                // These are conditions that *cannot* be easily checked automatically here
-                // Display them as reminders
-                 if (rule.hard) {
-                     // Don't mark as violated, just display as info/reminder
+                // These are conditions that *cannot* be easily checked automatically here.
+                // Display them as non-blocking reminders/notes.
+                 if (rule.hard) { // e.g., "Must not be decreased"
                      analysisHtml += `<p class="info">Reminder (${rule.code}): ${message}</p>`;
-                 } else {
-                     // Treat non-hard conditions as general info/warnings
+                 } else { // e.g., "Should be changed by at most X per epoch"
                      analysisHtml += `<p class="warning">Note (${rule.code}): ${message}</p>`;
                  }
-                 // Skip adding to violation/warning counts for these reminders
-                 continue; // Go to the next rule
-            // Add more rule types if needed (e.g., 'enum', 'pattern')
+                 // Skip adding to violation/warning counts for these reminders.
+                 return; // Continue to the next rule using 'return' inside forEach
+            // Add more rule types here if needed (e.g., 'enum', 'pattern')
+            default:
+                 console.warn(`Unknown rule type "${rule.type}" for parameter ${paramKey}`);
+                 return; // Skip unknown rule types
         }
 
-        // Determine if the violation/warning applies based on rule hardness
-        if (violated && rule.hard) {
+        // Add violation or warning message based on rule hardness
+        if (violated && rule.hard) { // Hard rule ("must") violated
             analysisHtml += `<p class="violation">Violation (${rule.code}): ${message}</p>`;
             violations++;
-        } else if (violated && !rule.hard) {
-            // If a 'soft' rule (should not) is violated
+        } else if (violated && !rule.hard) { // Soft rule ("should") violated
             analysisHtml += `<p class="warning">Warning (${rule.code}): ${message}</p>`;
             warnings++;
         }
-        // Note: 'warning' flag isn't used directly anymore for value checks,
-        // only for non-checkable 'condition' rules above.
     });
 
-    // Add summary message if no issues found
-    if (violations === 0 && warnings === 0 && analysisHtml.indexOf('<p') === -1) { // Check if any messages were added
+    // Add summary message if no issues were found *and* no reminders were added
+    if (violations === 0 && warnings === 0 && analysisHtml === '<h3>Value Analysis:</h3>') {
         analysisHtml += '<p class="info">Input value appears consistent with defined numeric Guardrail limits.</p>';
     }
      // Update the heading with counts if there were issues
@@ -300,6 +331,7 @@ function checkValueAgainstRules(paramKey, inputValueStr) {
  * Main function triggered by the button click.
  */
 function performCheck() {
+    console.log("Check button clicked."); // DEBUG
     const selectedParamKey = parameterSelect.value;
     const inputValue = parameterValueInput.value;
     resultsDiv.innerHTML = ''; // Clear previous results
@@ -308,10 +340,12 @@ function performCheck() {
         resultsDiv.innerHTML = '<p class="warning">Please select a parameter first.</p>';
         return;
     }
+    console.log(`Parameter selected: ${selectedParamKey}, Value: ${inputValue}`); // DEBUG
 
     const paramInfo = parameterData[selectedParamKey];
     if (!paramInfo) {
         resultsDiv.innerHTML = '<p class="violation">Error: Parameter data not found.</p>';
+        console.error(`Parameter data not found for key: ${selectedParamKey}`); // DEBUG
         return;
     }
 
@@ -328,8 +362,10 @@ function performCheck() {
             } else if (fullText && fullText.toLowerCase().includes('should')) {
                  itemClass += ' recommendation';
             }
-            // Display the full text found, or a fallback message
-            resultsHtml += `<div class="${itemClass}"><strong>${code}</strong> ${fullText ? fullText.substring(fullText.indexOf(')') + 1).trim() : 'Full text not found.'}</div>`;
+            // Extract only the text after the marker like (y) or (x)
+            const textOnly = fullText ? fullText.substring(fullText.indexOf(')') + 1).trim() : 'Full text not found.';
+            // Display the code (strong) and the extracted text
+            resultsHtml += `<div class="${itemClass}"><strong>${code}</strong> ${textOnly}</div>`;
         });
     } else {
         resultsHtml += '<p>No specific Guardrail codes listed for this parameter in the data.</p>';
@@ -342,6 +378,7 @@ function performCheck() {
 
 
     resultsDiv.innerHTML = resultsHtml;
+    console.log("Results displayed."); // DEBUG
 }
 
 /**
@@ -354,15 +391,44 @@ function updateUnitDisplay() {
      } else {
           parameterUnitSpan.textContent = '';
      }
+     console.log(`Unit display updated for ${selectedParamKey}`); // DEBUG
 }
 
 // --- Initialization ---
-populateParameterDropdown(); // Fill the dropdown on page load
-checkButton.addEventListener('click', performCheck); // Add listener to button
-parameterSelect.addEventListener('change', updateUnitDisplay); // Update unit on selection change
+// Moved initialization logic into a DOMContentLoaded listener
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM fully loaded and parsed."); // DEBUG
 
-// Initial check for constitution text
-if (typeof constitutionText === 'undefined' || !constitutionText.trim()) {
-    console.error("Constitution text from constitution.js seems empty or not loaded!");
-    resultsDiv.innerHTML = '<p class="violation"><strong>Error:</strong> Could not load constitution text! Please ensure constitution.js is present and correct.</p>';
-}
+    // Re-get elements inside the listener just in case
+    const localParameterSelect = document.getElementById('parameterSelect');
+    const localCheckButton = document.getElementById('checkButton');
+
+    if (!localParameterSelect) {
+        console.error("Failed to find parameterSelect element on DOMContentLoaded!");
+        return;
+    }
+     if (!localCheckButton) {
+        console.error("Failed to find checkButton element on DOMContentLoaded!");
+        // Continue if button missing, but log error
+    }
+
+
+    // Initial check for constitution text
+    if (typeof constitutionText === 'undefined' || !constitutionText.trim()) {
+        console.error("Constitution text from constitution.js seems empty or not loaded!");
+        if(resultsDiv) resultsDiv.innerHTML = '<p class="violation"><strong>Error:</strong> Could not load constitution text! Please ensure constitution.js is present and correct.</p>';
+    } else {
+        console.log("Constitution text loaded successfully."); // DEBUG
+    }
+
+    // Populate dropdown
+    populateParameterDropdown();
+
+    // Add event listeners
+    if(localCheckButton) localCheckButton.addEventListener('click', performCheck);
+    localParameterSelect.addEventListener('change', updateUnitDisplay);
+
+    console.log("Initialization complete."); // DEBUG
+});
+
+console.log("End of script execution."); // DEBUG
